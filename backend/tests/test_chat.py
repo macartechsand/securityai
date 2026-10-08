@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.providers.base import ProviderError, ProviderNotConfigured, ProviderTimeout
+from app.providers.base import ProviderError, ProviderNotConfigured, ProviderQuotaExceeded, ProviderTimeout
 from tests.conftest import TEST_API_KEY, FakeProvider, make_settings
 
 
@@ -18,7 +18,7 @@ def test_valid_message(client, provider, mode):
     response = post(client, mode=mode)
     assert response.status_code == 200
     data = response.json()
-    assert data == {"answer": "fake answer", "mode": mode, "warnings": []}
+    assert data == {"answer": "fake answer", "mode": mode, "warnings": [], "remaining_today": 19}
     assert len(provider.calls) == 1
 
 
@@ -189,3 +189,47 @@ def test_security_headers_present(client):
     response = client.get("/api/health")
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_truncated_answer_adds_warning_and_technical_gets_larger_limit(make_client, provider):
+    provider.truncated = True
+    client = make_client()
+    body = client.post("/api/chat", json={"message": "hi", "mode": "technical"}).json()
+    assert "truncated" in body["warnings"]
+    assert provider.calls[-1]["max_output_tokens"] == 2048
+    client.post("/api/chat", json={"message": "hi", "mode": "simple"})
+    assert provider.calls[-1]["max_output_tokens"] == 1024
+
+
+def test_daily_user_limit_returns_429_with_code(make_client):
+    client = make_client(make_settings(daily_limit_per_user=2))
+    first = client.post("/api/chat", json={"message": "hi"}).json()
+    assert first["remaining_today"] == 1
+    client.post("/api/chat", json={"message": "hi"})
+    blocked = client.post("/api/chat", json={"message": "hi"})
+    assert blocked.status_code == 429
+    assert blocked.json()["code"] == "daily_limit_user"
+    assert int(blocked.headers["Retry-After"]) > 0
+
+
+def test_daily_global_limit_returns_429_with_code(make_client):
+    client = make_client(make_settings(daily_limit_global=1))
+    client.post("/api/chat", json={"message": "hi"})
+    blocked = client.post("/api/chat", json={"message": "hi"})
+    assert blocked.status_code == 429
+    assert blocked.json()["code"] == "daily_limit_global"
+
+
+def test_failed_model_call_does_not_consume_daily_quota(make_client):
+    failing = FakeProvider(error=ProviderError("boom"))
+    client = make_client(make_settings(daily_limit_per_user=1), failing)
+    assert client.post("/api/chat", json={"message": "hi"}).status_code == 502
+    failing.error = None
+    assert client.post("/api/chat", json={"message": "hi"}).status_code == 200
+
+
+def test_provider_quota_exhausted_maps_to_429(make_client):
+    client = make_client(prov=FakeProvider(error=ProviderQuotaExceeded("quota")))
+    response = client.post("/api/chat", json={"message": "hi"})
+    assert response.status_code == 429
+    assert response.json()["code"] == "daily_limit_global"

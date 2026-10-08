@@ -40,3 +40,5 @@ class ChatResponse(BaseModel):
     mode: Mode
     # Machine-readable notices for the UI, e.g. "secret_detected".
     warnings: list[str] = Field(default_factory=list)
+    # Questions this client can still ask today (None when not tracked).
+    remaining_today: int | None = None

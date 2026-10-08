@@ -45,7 +45,8 @@ def test_success_and_request_shape():
         make_settings(gemini_model="some-model", gemini_thinking_budget=0),
         [ChatTurn("user", "q1"), ChatTurn("assistant", "a1"), ChatTurn("user", "q2")],
     )
-    assert answer == "hi there"
+    assert answer.text == "hi there"
+    assert answer.truncated is False
     assert seen["url"].endswith("/v1beta/models/some-model:generateContent")
     # key travels in a header, never in the URL
     assert TEST_API_KEY not in seen["url"]
@@ -115,3 +116,51 @@ def test_invalid_json_raises():
 def test_missing_api_key_raises_not_configured():
     with pytest.raises(ProviderNotConfigured):
         run_generate(lambda r: httpx.Response(200, json=ok_payload()), make_settings(gemini_api_key=None))
+
+
+def test_max_tokens_finish_reason_marks_truncated():
+    payload = ok_payload("cut off")
+    payload["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    answer = run_generate(lambda request: httpx.Response(200, json=payload))
+    assert answer.text == "cut off"
+    assert answer.truncated is True
+
+
+async def _no_sleep(_seconds):
+    return None
+
+
+def test_503_is_retried_once_then_succeeds(monkeypatch):
+    monkeypatch.setattr("app.providers.gemini.asyncio.sleep", _no_sleep)
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(503) if len(calls) == 1 else httpx.Response(200, json=ok_payload())
+
+    assert run_generate(handler).text == "hi there"
+    assert len(calls) == 2
+
+
+def test_503_twice_fails_after_a_single_retry(monkeypatch):
+    monkeypatch.setattr("app.providers.gemini.asyncio.sleep", _no_sleep)
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(503)
+
+    with pytest.raises(ProviderError):
+        run_generate(handler)
+    assert len(calls) == 2
+
+
+def test_thinking_level_is_sent_and_wins_over_budget():
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=ok_payload())
+
+    run_generate(handler, make_settings(gemini_thinking_level="minimal", gemini_thinking_budget=0))
+    assert seen["body"]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "minimal"}

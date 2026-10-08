@@ -28,6 +28,7 @@ const Chat: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [remainingToday, setRemainingToday] = useState<number | null>(null);
   const idCounter = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -50,9 +51,12 @@ const Chat: React.FC = () => {
   const errorText = (error: unknown): string => {
     if (error instanceof ChatApiError) {
       const base = t(`chat.error.${error.kind}`);
-      return error.kind === 'rate_limited' && error.retryAfterSeconds
-        ? `${base} (${error.retryAfterSeconds}s)`
-        : base;
+      if (error.kind === 'rate_limited' && error.retryAfterSeconds) return `${base} (${error.retryAfterSeconds}s)`;
+      if (error.kind.startsWith('daily_limit') && error.retryAfterSeconds) {
+        const hours = Math.max(1, Math.ceil(error.retryAfterSeconds / 3600));
+        return `${base} ${t('chat.limit.resetIn').replace('{hours}', String(hours))}`;
+      }
+      return base;
     }
     return t('chat.error.unavailable');
   };
@@ -72,11 +76,13 @@ const Chat: React.FC = () => {
 
     try {
       const result = await sendChat({ message: text, mode, history });
+      if (typeof result.remaining_today === 'number') setRemainingToday(result.remaining_today);
       setMessages((prev) => [
         ...prev,
         { id: nextId(), role: 'assistant', content: result.answer, warnings: result.warnings },
       ]);
     } catch (error) {
+      if (error instanceof ChatApiError && error.kind === 'daily_limit_user') setRemainingToday(0);
       setMessages((prev) => [
         ...prev,
         { id: nextId(), role: 'assistant', content: errorText(error), isError: true },
@@ -176,6 +182,9 @@ const Chat: React.FC = () => {
                   >
                     {isUser || message.isError ? message.content : <MessageContent text={message.content} />}
                   </div>
+                  {message.warnings?.includes('truncated') && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('chat.warning.truncated')}</p>
+                  )}
                   {message.warnings?.includes('secret_detected') && (
                     <div className="flex items-start space-x-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 p-3 text-xs text-amber-900 dark:text-amber-200">
                       <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -211,6 +220,7 @@ const Chat: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-500 dark:text-slate-400">
               {input.length}/{MAX_MESSAGE_CHARS}
+              {remainingToday !== null && ` · ${t('chat.limit.remaining').replace('{count}', String(remainingToday))}`}
             </span>
             <button
               type="submit"

@@ -1,0 +1,21 @@
+# Netlify: static frontend only. The API (FastAPI) runs on Render; no secret lives here.
+# Set VITE_API_BASE_URL in the Netlify UI (Site configuration > Environment variables) to the
+# public Render URL, without a trailing slash. It is public and baked in at build time.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"

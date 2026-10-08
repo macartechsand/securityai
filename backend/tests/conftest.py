@@ -8,7 +8,7 @@ from pydantic import SecretStr
 
 from app.core.config import Settings
 from app.main import create_app
-from app.providers.base import ChatTurn, ModelProvider
+from app.providers.base import ChatTurn, ModelAnswer, ModelProvider
 
 TEST_API_KEY = "test-key-should-never-leak-0123456789"
 
@@ -19,6 +19,7 @@ class FakeProvider(ModelProvider):
     def __init__(self, answer: str = "fake answer", error: Exception | None = None) -> None:
         self.answer = answer
         self.error = error
+        self.truncated = False
         self.calls: list[dict] = []
 
     async def generate(
@@ -28,7 +29,7 @@ class FakeProvider(ModelProvider):
         messages: Sequence[ChatTurn],
         max_output_tokens: int,
         temperature: float,
-    ) -> str:
+    ) -> ModelAnswer:
         self.calls.append(
             {
                 "system_prompt": system_prompt,
@@ -39,7 +40,7 @@ class FakeProvider(ModelProvider):
         )
         if self.error:
             raise self.error
-        return self.answer
+        return ModelAnswer(self.answer, truncated=self.truncated)
 
 
 def make_settings(**overrides) -> Settings:

@@ -18,9 +18,16 @@ services:
       - key: CORS_ORIGINS
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
-      - key: GEMINI_THINKING_BUDGET
-        value: "0"
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_THINKING_LEVEL
+        value: minimal
       # Render terminates TLS in front of the app, so the client IP arrives in X-Forwarded-For.
       - key: TRUST_PROXY_HEADERS
         value: "true"
+      # Daily caps: keep DAILY_LIMIT_GLOBAL below the Gemini requests-per-day quota.
+      - key: DAILY_LIMIT_PER_USER
+        value: "20"
+      - key: DAILY_LIMIT_GLOBAL
+        value: "400"
+      - key: PYTHON_VERSION
+        value: "3.12.7"

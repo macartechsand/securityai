@@ -27,4 +27,6 @@ export type ChatResponse = {
   answer: string;
   mode: Mode;
   warnings: string[];
+  /** Questions this visitor can still ask today. */
+  remaining_today?: number | null;
 };

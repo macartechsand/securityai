@@ -11,12 +11,23 @@ class ChatTurn:
     content: str
 
 
+@dataclass(frozen=True)
+class ModelAnswer:
+    text: str
+    # True when the model stopped because it hit the output-token limit.
+    truncated: bool = False
+
+
 class ProviderError(Exception):
     """Upstream model failure. Messages must never contain secrets or user content."""
 
 
 class ProviderNotConfigured(ProviderError):
     """No usable credentials/configuration for the provider."""
+
+
+class ProviderQuotaExceeded(ProviderError):
+    """The provider rejected the call because our quota is used up (HTTP 429)."""
 
 
 class ProviderTimeout(ProviderError):
@@ -38,5 +49,5 @@ class ModelProvider(ABC):
         messages: Sequence[ChatTurn],
         max_output_tokens: int,
         temperature: float,
-    ) -> str:
-        """Return the model's text answer for the conversation."""
+    ) -> ModelAnswer:
+        """Return the model's answer for the conversation."""

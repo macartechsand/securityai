@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from app.orchestrator.orchestrator import ChatOrchestrator
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -30,12 +31,34 @@ def client_ip(request: Request) -> str:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
-    allowed, retry_after = request.app.state.limiter.check(client_ip(request))
+    ip = client_ip(request)
+    allowed, retry_after = request.app.state.limiter.check(ip)
     if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many requests. Please wait a moment and try again.",
-            headers={"Retry-After": str(retry_after)},
+        return _limited("rate_limited", "Too many requests. Please wait a moment and try again.", retry_after)
+
+    quota = request.app.state.daily_quota
+    blocked, remaining = quota.consume(ip)
+    if blocked:
+        detail = (
+            "You reached today's question limit."
+            if blocked == "user"
+            else "The daily capacity of the assistant has been reached."
         )
+        return _limited(f"daily_limit_{blocked}", detail, quota.seconds_until_reset())
+
     orchestrator: ChatOrchestrator = request.app.state.orchestrator
-    return await orchestrator.handle(payload)
+    try:
+        response = await orchestrator.handle(payload)
+    except Exception:
+        quota.refund(ip)  # no answer was delivered, so it does not count
+        raise
+    response.remaining_today = remaining
+    return response
+
+
+def _limited(code: str, detail: str, retry_after: int) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": detail, "code": code},
+        headers={"Retry-After": str(retry_after)},
+    )

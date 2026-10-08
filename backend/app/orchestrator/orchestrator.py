@@ -61,12 +61,15 @@ class ChatOrchestrator:
             "chat mode=%s history=%d msg_chars=%d secret_detected=%s",
             request.mode, len(history), len(request.message), secret_detected,
         )
-        answer = await self._provider.generate(
+        max_tokens = s.max_output_tokens_technical if request.mode == "technical" else s.max_output_tokens
+        result = await self._provider.generate(
             system_prompt=system_prompt,
             messages=turns,
-            max_output_tokens=s.max_output_tokens,
+            max_output_tokens=max_tokens,
             temperature=s.temperature,
         )
 
         warnings = ["secret_detected"] if secret_detected else []
-        return ChatResponse(answer=answer, mode=request.mode, warnings=warnings)
+        if result.truncated:
+            warnings.append("truncated")
+        return ChatResponse(answer=result.text, mode=request.mode, warnings=warnings)

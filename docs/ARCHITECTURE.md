@@ -84,6 +84,6 @@ institutional pages were kept.
 
 ## Model
 
-Default `gemini-2.5-flash` through the Gemini REST API, configurable with `GEMINI_MODEL`. This default
+Default `gemini-3.5-flash-lite` through the Gemini REST API, configurable with `GEMINI_MODEL`. This default
 was not validated against the live API during development (no key was available there); confirm the
 model name and the `GEMINI_THINKING_BUDGET` setting with a live smoke test (`pytest -m live`) before launch.

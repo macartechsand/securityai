@@ -12,12 +12,13 @@ from fastapi.responses import JSONResponse
 
 from app.api.chat import router as api_router
 from app.core.config import Settings
-from app.core.rate_limit import SlidingWindowRateLimiter
+from app.core.rate_limit import DailyQuota, SlidingWindowRateLimiter
 from app.orchestrator.orchestrator import ChatOrchestrator, InputError
 from app.providers.base import (
     ModelProvider,
     ProviderError,
     ProviderNotConfigured,
+    ProviderQuotaExceeded,
     ProviderTimeout,
 )
 from app.providers.gemini import GeminiProvider
@@ -47,6 +48,9 @@ def create_app(settings: Settings | None = None, provider: ModelProvider | None 
     app = FastAPI(title="MacarTech Security AI", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
     app.state.settings = settings
     app.state.limiter = SlidingWindowRateLimiter(settings.rate_limit_requests, settings.rate_limit_window_seconds)
+    app.state.daily_quota = DailyQuota(
+        settings.daily_limit_per_user, settings.daily_limit_global, settings.daily_reset_utc_hour
+    )
     app.state.orchestrator = ChatOrchestrator(provider or GeminiProvider(settings), settings)
 
     app.add_middleware(
@@ -55,6 +59,7 @@ def create_app(settings: Settings | None = None, provider: ModelProvider | None 
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type"],
+        expose_headers=["Retry-After"],
         max_age=600,
     )
 
@@ -93,6 +98,13 @@ def create_app(settings: Settings | None = None, provider: ModelProvider | None 
     async def not_configured_handler(request: Request, exc: ProviderNotConfigured):
         logger.error("model provider not configured")
         return _error(503, "The assistant is not available right now.")
+
+    @app.exception_handler(ProviderQuotaExceeded)
+    async def quota_handler(request: Request, exc: ProviderQuotaExceeded):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "The daily capacity of the assistant has been reached.", "code": "daily_limit_global"},
+        )
 
     @app.exception_handler(ProviderTimeout)
     async def timeout_handler(request: Request, exc: ProviderTimeout):

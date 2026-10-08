@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Facebook, Twitter, Instagram, Github as GitHub } from 'lucide-react';
+import { Shield, Instagram, Github as GitHub } from 'lucide-react';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();

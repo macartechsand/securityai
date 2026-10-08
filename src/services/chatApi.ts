@@ -8,7 +8,14 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 
 const REQUEST_TIMEOUT_MS = 35_000;
 
-export type ChatErrorKind = 'rate_limited' | 'invalid' | 'unavailable' | 'timeout' | 'network';
+export type ChatErrorKind =
+  | 'rate_limited'
+  | 'daily_limit_user'
+  | 'daily_limit_global'
+  | 'invalid'
+  | 'unavailable'
+  | 'timeout'
+  | 'network';
 
 export class ChatApiError extends Error {
   kind: ChatErrorKind;
@@ -51,7 +58,11 @@ export async function sendChat(payload: ChatRequest): Promise<ChatResponse> {
 
   if (response.status === 429) {
     const retry = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
-    throw new ChatApiError('rate_limited', Number.isFinite(retry) ? retry : undefined);
+    const body: unknown = await response.json().catch(() => null);
+    const code = typeof body === 'object' && body !== null ? (body as Record<string, unknown>).code : undefined;
+    const kind: ChatErrorKind =
+      code === 'daily_limit_user' || code === 'daily_limit_global' ? code : 'rate_limited';
+    throw new ChatApiError(kind, Number.isFinite(retry) ? retry : undefined);
   }
   if (response.status === 413 || response.status === 422) throw new ChatApiError('invalid');
   if (response.status === 504) throw new ChatApiError('timeout');

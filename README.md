@@ -71,15 +71,18 @@ npm run typecheck && npm run build         # frontend
 | Variable | Default | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | none | **Secret.** Model API key. Without it `/api/chat` returns 503. |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Model name. Check the current list before deploying; names change. |
-| `GEMINI_THINKING_BUDGET` | unset | `0` disables thinking on 2.5 Flash. Remove for models that reject it. |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | Model name. Check the current list before deploying; names change. |
+| `GEMINI_THINKING_LEVEL` | unset | `minimal` for Gemini 3.x so reasoning does not consume the output limit. |
+| `GEMINI_THINKING_BUDGET` | unset | Gemini 2.5 only; `0` disables thinking. Ignored if the level is set. |
 | `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated exact frontend origins. |
 | `MAX_MESSAGE_CHARS` | `2000` | Max user message length. |
 | `MAX_HISTORY_MESSAGES` / `MAX_HISTORY_CHARS` | `10` / `6000` | History kept per request / max length per item. |
-| `MAX_OUTPUT_TOKENS` | `1024` | Output cap. |
+| `MAX_OUTPUT_TOKENS` / `MAX_OUTPUT_TOKENS_TECHNICAL` | `1024` / `2048` | Output cap for Simple / Technical. |
 | `MODEL_TIMEOUT_SECONDS` | `25` | Upstream timeout. |
 | `TEMPERATURE` | `0.3` | Sampling temperature. |
 | `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `20` / `60` | Per-IP limit on `/api/chat`. |
+| `DAILY_LIMIT_PER_USER` / `DAILY_LIMIT_GLOBAL` | `20` / `400` | Questions per client IP per day / for the whole service. Keep the global cap below the model quota. |
+| `DAILY_RESET_UTC_HOUR` | `8` | UTC hour when daily counters reset (Gemini quotas reset at midnight Pacific). |
 | `TRUST_PROXY_HEADERS` | `false` | `true` only behind exactly one trusted proxy. |
 | `LOG_LEVEL` | `INFO` | Logging level. |
 
@@ -135,7 +138,7 @@ idle, so the first request after a pause is slow.
 - Answers come from a general LLM guided by a prompt. They can be wrong and are not grounded in
   retrieved sources yet. The prompt rules are instructions, not guarantees.
 - Secret redaction is heuristic and will miss some formats.
-- Rate limiting is in memory and per process: fine for one instance, not for scaling out.
+- Rate limiting and daily limits are in memory and per process: fine for one instance, not for scaling out, and they reset when the service restarts (Render free sleeps when idle). "Per user" means per client IP, since there are no accounts yet.
 - The interface is translated into English and Portuguese only (chosen from the browser language); the model replies in whatever language the user writes in.
 - No automated frontend tests yet.
 
