@@ -118,20 +118,24 @@ Interactive docs are at `/api/docs`.
 
 ## Deploy
 
-Cheapest simple path: a free **Render** web service for the API plus a free static host for the
-frontend. Free tiers change, so check current limits; on Render's free plan the service sleeps when
-idle, so the first request after a pause is slow.
+Production runs on free tiers: **Render** for the API, **Netlify** for the static frontend,
+**Gemini API** for the model. Free tiers change, so check current limits. Render's free plan sleeps
+when idle, so the first request after a pause is slow (about 20 s).
 
-1. **Backend on Render.** Create a Blueprint from this repo (`render.yaml`) or a Web Service with
-   root directory `backend`, build `pip install -r requirements.txt`, start
-   `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, health check `/api/health`. Set
-   `GEMINI_API_KEY` (secret) and `CORS_ORIGINS` (your frontend URL, no trailing slash) in the dashboard.
-   If the build fails on the Python version, set `PYTHON_VERSION` (the code needs 3.10+).
-2. **Frontend on Cloudflare Pages or Netlify.** Build command `npm run build`, output directory `dist`,
-   environment variable `VITE_API_BASE_URL=https://<your-render-service>.onrender.com`. `public/_redirects`
-   provides the SPA fallback. (On Vercel, add a rewrite of all paths to `/index.html`.)
-3. Redeploy the frontend after changing `VITE_API_BASE_URL`; it is baked in at build time.
-4. Verify: `curl https://<api>/api/health`, then send a message from the site.
+1. **Backend on Render.** New > Blueprint > select this repo; it reads `render.yaml` (root `backend`,
+   pinned `PYTHON_VERSION`, health check `/api/health`, daily limits). When asked, set
+   `GEMINI_API_KEY` (secret) and `CORS_ORIGINS` (exact frontend URL, `https://`, no trailing slash;
+   comma-separate several). Note the service URL.
+2. **Frontend on Netlify.** Add new project > Import from GitHub > this repo; it reads `netlify.toml`
+   (build `npm run build`, publish `dist`, SPA fallback, security headers). Set
+   `VITE_API_BASE_URL=https://<your-render-service>.onrender.com` (public, no trailing slash) before
+   the first deploy.
+3. Put the Netlify URL in `CORS_ORIGINS` on Render. A "could not reach the server" error in the site
+   almost always means this value does not match the site URL exactly.
+4. Redeploy the frontend after changing `VITE_API_BASE_URL`; it is baked in at build time.
+5. Verify: `curl https://<api>/api/health`, then ask one Simple and one Technical question on the site.
+
+After that, merging to `main` redeploys both services automatically.
 
 ## Limitations
 
