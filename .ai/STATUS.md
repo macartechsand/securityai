@@ -46,7 +46,12 @@ Atualizado em 2026-10-08. Contexto de arquitetura e regras: `.ai/project-context
 - F9: fluxo completo e checklist de MVP pronto.
 - Observação: o Gemini devolve 503 com frequência (demanda alta). Há 1 retry; se persistir, avaliar `MODEL_TIMEOUT_SECONDS`.
 
-## Deploy (plano)
+## Deploy (feito em 2026-10-08)
+- Código em https://github.com/macartechsand/securityai (branch `main`).
+- Backend no Render: https://macartech-security-ai-api.onrender.com (`/api/health` OK; cold start ~22 s).
+- Frontend no Netlify (projeto novo). Próximas mudanças: via branch + PR.
+
+## Deploy (referência)
 - Frontend: Netlify (`VITE_API_BASE_URL` = URL pública do Render, sem barra final; rebuild após mudar).
 - Backend: Render via `render.yaml`; no painel definir `GEMINI_API_KEY` e `CORS_ORIGINS` (URL do Netlify, sem barra final). `TRUST_PROXY_HEADERS=true` já está no yaml.
 - Render free dorme quando ocioso; o primeiro request pode passar de 35 s (timeout do frontend).
